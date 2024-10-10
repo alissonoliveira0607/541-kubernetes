@@ -9,11 +9,11 @@
         path: /etc/hosts
         line: "{{ item }}"
       with_items:
-        - 172.16.1.110 kube-proxy
-        - 172.16.1.111 kube-master1
-        - 172.16.1.112 kube-master2
-        - 172.16.1.113 kube-master3
-        - 172.16.1.114 kube-worker1
+        - 172.16.1.150 kube-proxy
+        - 172.16.1.151 kube-master1
+        - 172.16.1.152 kube-master2
+        - 172.16.1.153 kube-master3
+        - 172.16.1.154 kube-worker1
 
     - name: Adiciona usuario suporte
       user:
