@@ -13,3 +13,4 @@ spec:
     persistentvolumeclaims: "5"
     services.loadbalancers: "2"
     services.nodeports: "0"
+    requests.storage: "10Gi"
