@@ -134,12 +134,12 @@
     - name: Adicione o repositório apt do Kubernetes ao sources.list
       lineinfile:
         path: /etc/apt/sources.list.d/kubernetes.list
-        line: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.26/deb/ /"
+        line: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.28/deb/ /"
         create: yes
         state: present
 
     - name: Importar chave GPG para o sistema
-      shell: "curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.26/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg"
+      shell: "curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.28/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg"
       args:
         warn: false
 
