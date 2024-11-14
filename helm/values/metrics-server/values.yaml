@@ -1,0 +1,4 @@
+containerPort: 4443
+readinessProbe: {}
+args: 
+  - "--kubelet-insecure-tls"
