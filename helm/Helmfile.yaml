@@ -45,4 +45,15 @@ releases:
     values:
       - values/nfs-subdir/values.yaml
 
-    
+  - name:  longhorn
+    namespace: longhorn-system
+    createNamespace: true
+    chart: longhorn/longhorn
+    version: 1.5.1
+    values:
+      - values/longhorn/values.yaml
+
+  - name:  twun
+    namespace: docker-registry
+    createNamespace: true
+    chart: twun/docker-registry
