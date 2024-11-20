@@ -57,3 +57,18 @@ releases:
     namespace: docker-registry
     createNamespace: true
     chart: twun/docker-registry
+
+  - name:  k8s-dashboard
+    namespace: kubernetes-dashboard
+    createNamespace: true
+    chart: k8s-dashboard/kubernetes-dashboard
+  
+  - name:  prometheus-community
+    namespace: prometheus
+    createNamespace: true
+    chart: prometheus-community/prometheus
+
+  - name:  grafana
+    namespace: prometheus
+    createNamespace: true
+    chart: grafana/grafana
