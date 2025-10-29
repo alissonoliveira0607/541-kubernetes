@@ -199,9 +199,54 @@
         group: suporte
         mode: '0644'
 
-    - name: Instala a rede calico no cluster
+    - name: Criando o arquivo tigera-operator.yaml
+      copy:
+        src: files/tigera-operator.yaml
+        dest: /home/vagrant/tigera-operator.yaml
+        owner: vagrant
+        group: vagrant
+        mode: 0644
+
+    - name: Criando o arquivo custom-resources.yaml
+      copy:
+        src: files/custom-resources.yaml
+        dest: /home/vagrant/custom-resources.yaml
+        owner: vagrant
+        group: vagrant
+        mode: 0644
+
+    - name: Instala a rede calico no cluster (tigera-operator.yaml)
       become: false
-      command: kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.26.1/manifests/calico.yaml
+      command: kubectl apply -f /home/vagrant/tigera-operator.yaml
+
+    - name: Aguarda tigera-operator Available
+      become: false
+      command: kubectl -n tigera-operator wait --for=condition=Available --timeout=180s deployment/tigera-operator
+      register: wait_operator
+      changed_when: false
+      failed_when: wait_operator.rc != 0
+
+    - name: Aguarda CRDs do Tigera ficarem Established
+      become: false
+      vars:
+        crds:
+          - installations.operator.tigera.io
+          - apiservers.operator.tigera.io
+          - goldmanes.operator.tigera.io
+          - whiskers.operator.tigera.io
+      loop: "{{ crds }}"
+      loop_control:
+        loop_var: crd
+      command: kubectl wait --for=condition=Established --timeout=180s crd/{{ crd }}
+      register: wait_crds
+      until: wait_crds.rc == 0
+      retries: 10
+      delay: 6
+      changed_when: false
+
+    - name: Instala a rede calico no cluster (custom-resources.yaml)
+      become: false
+      command: kubectl apply -f /home/vagrant/custom-resources.yaml
 
     - name: Permite que o master execute Pods como Worker
       become: false
