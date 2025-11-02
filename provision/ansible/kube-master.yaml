@@ -3,213 +3,294 @@
   become: yes
   become_user: root
   become_method: sudo
+
+  vars:
+    hosts_entries:
+      - "172.16.1.100 kube-master"
+      - "172.16.1.101 kube-node1"
+      - "172.16.1.102 kube-node2"
+      - "172.16.1.103 kube-infra"
+      - "172.16.1.202 docker-registry"
+
+    containerd_modules:
+      - overlay
+      - br_netfilter
+
+    sysctl_params:
+      - net.bridge.bridge-nf-call-ip6tables = 1
+      - net.bridge.bridge-nf-call-iptables = 1
+      - net.ipv4.ip_forward = 1
+
+    common_packages:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg2
+      - software-properties-common
+      - mysql-client
+      - nfs-common
+      - snapd
+      - git
+      - vim
+
   tasks:
-    - name: Garantindo /etc/hosts
+
+    - name: Configura /etc/hosts
       lineinfile:
         path: /etc/hosts
         line: "{{ item }}"
-      with_items:
-        - 172.16.1.100 kube-master
-        - 172.16.1.101 kube-node1
-        - 172.16.1.102 kube-node2
-        - 172.16.1.103 kube-infra
-        - 172.16.1.202 docker-registry
+      loop: "{{ hosts_entries }}"
 
-    - name: Remove swap do arquivo /etc/fstab
+    - name: Remove swap do /etc/fstab
       mount:
         name: "{{ item }}"
         fstype: swap
         state: absent
-      with_items:
+      loop:
         - swap
         - none
 
-    - name: Desativa o swap
+    - name: Desativa swap
       command: swapoff -a
       when: ansible_swaptotal_mb > 0
 
-    - name: Cria o arquivo containerd.conf
-      file:
-        path: /etc/modules-load.d/containerd.conf
-        state: touch
+    - name: Configura containerd
+      block:
+        - name: Cria arquivo containerd.conf
+          file:
+            path: /etc/modules-load.d/containerd.conf
+            state: touch
 
-    - name: Configurando modulos
-      lineinfile:
-        path: /etc/modules-load.d/containerd.conf
-        line: "{{ item }}"
-      with_items:
-        - overlay
-        - br_netfilter
+        - name: Configura módulos containerd
+          lineinfile:
+            path: /etc/modules-load.d/containerd.conf
+            line: "{{ item }}"
+          loop: "{{ containerd_modules }}"
 
-    - name: Carregando modulos
-      shell: modprobe overlay && modprobe br_netfilter
+        - name: Carrega módulos
+          shell: modprobe overlay && modprobe br_netfilter
 
-    - name: Cria o arquivo dkubernetes.conf
-      file:
-        path: /etc/sysctl.d/kubernetes.conf
-        state: touch
+    - name: Configura sysctl para Kubernetes
+      block:
+        - name: Cria arquivo dkubernetes.conf
+          file:
+            path: /etc/sysctl.d/kubernetes.conf
+            state: touch
 
-    - name: Configurando sysctl
-      lineinfile:
-        path: /etc/sysctl.d/kubernetes.conf
-        line: "{{ item }}"
-      with_items:
-        - net.bridge.bridge-nf-call-ip6tables = 1
-        - net.bridge.bridge-nf-call-iptables = 1
-        - net.ipv4.ip_forward = 1
+        - name: Adiciona parâmetros sysctl
+          lineinfile:
+            path: /etc/sysctl.d/kubernetes.conf
+            line: "{{ item }}"
+          loop: "{{ sysctl_params }}"
 
-    - name: Aplicando sysctl
-      shell: sysctl --system
+        - name: Aplica sysctl
+          command: sysctl --system
 
-    - name: Adiciona usuario suporte
+    - name: Cria usuário suporte
       user:
         name: suporte
         shell: /bin/bash
-        password : $1$QbUARykG$p2nthVG8AkDvabKPHwboa1
+        password: $1$QbUARykG$p2nthVG8AkDvabKPHwboa1
 
-    - name: Instala pacotes que permitem que o apt seja usado sobre HTTPS
+    - name: Instala pacotes básicos
       apt:
-        name: "{{ packages }}"
+        name: "{{ common_packages }}"
         state: present
         update_cache: yes
-      vars:
-        packages:
-        - apt-transport-https
-        - ca-certificates
-        - curl
-        - gnupg2
-        - software-properties-common
-        - mysql-client
-        - nfs-common
-        - snapd
-        - git
-        - vim
 
-    - name: Clona repositório com os arquivos do curso para a HOME do usuario suporte
+    - name: Clona repositório do curso
       git:
-        repo: 'https://github.com/4linux/541-kubernetes.git'
+        repo: 'https://github.com/alissonoliveira0607/541-kubernetes.git'
         dest: /home/suporte/541
+        force: yes
+        update: yes
+      
 
-    - name: Adiciona uma chave de assinatura apt para o Docker
-      apt_key:
-        url: https://download.docker.com/linux/ubuntu/gpg
-        state: present
+    - name: Configura Docker
+      block:
+        - name: Adiciona chave Docker
+          apt_key:
+            url: https://download.docker.com/linux/ubuntu/gpg
+            state: present
 
-    - name: Adiciona repositorio apt para versao estavel
-      apt_repository:
-        repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable
-        state: present
+        - name: Adiciona repositório Docker
+          apt_repository:
+            repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable
+            state: present
 
-    - name: Instala o Containerd
-      apt:
-        name: containerd.io
-        state: present
-        update_cache: yes
+        - name: Instala containerd
+          apt:
+            name: containerd.io
+            state: present
+            update_cache: yes
 
-    - name: Criar conf default do Containerd
-      shell: containerd config default | sudo tee /etc/containerd/config.toml >/dev/null 2>&1
+        - name: Cria config default containerd
+          shell: containerd config default | tee /etc/containerd/config.toml >/dev/null 2>&1
+          args:
+            creates: /etc/containerd/config.toml
+          notify: "Reinicia containerd"
 
-    - name: Ativa o Systemd no arquivo config.toml
-      replace:
-        path: /etc/containerd/config.toml
-        regexp: 'SystemdCgroup = false'
-        replace: 'SystemdCgroup = true'
+        - name: Ativa SystemdCgroup
+          replace:
+            path: /etc/containerd/config.toml
+            regexp: 'SystemdCgroup = false'
+            replace: 'SystemdCgroup = true'
+          notify: "Reinicia containerd"
 
-    - name: Ativa o uso de plugins no arquivo config.toml
-      replace:
-        path: /etc/containerd/config.toml
-        regexp: '^disabled_plugins ='
-        replace: '#disabled_plugins ='
+        - name: Habilita plugins containerd
+          replace:
+            path: /etc/containerd/config.toml
+            regexp: '^disabled_plugins ='
+            replace: '#disabled_plugins ='
+          notify: "Reinicia containerd"
 
-    - name: Reinicia o containerd
-      service:
-        name: containerd
-        state: restarted
-
-    - name: Criar diretório /etc/apt/keyrings para apt do Kubernetes
+    - name: Cria diretório keyrings apt
       file:
         path: /etc/apt/keyrings
         state: directory
+        mode: '0755'
 
-    - name: Adicione o repositório apt do Kubernetes ao sources.list
-      lineinfile:
-        path: /etc/apt/sources.list.d/kubernetes.list
-        line: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.28/deb/ /"
-        create: yes
-        state: present
+    - name: Baixa e configura chave Kubernetes
+      block:
+        - name: Baixar chave GPG do Kubernetes
+          get_url:
+            url: https://pkgs.k8s.io/core:/stable:/v1.28/deb/Release.key
+            dest: /tmp/kubernetes-apt-key.gpg
+            mode: '0644'
 
-    - name: Importar chave GPG para o sistema
-      shell: "curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.28/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg"
-      args:
-        warn: false
+        - name: Criar keyring apt do Kubernetes
+          command: >
+            gpg --batch --yes --dearmor
+            -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+            /tmp/kubernetes-apt-key.gpg
+          args:
+            creates: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
 
-    - name: Instala os pacotes do Kubernetes
+        - name: Adicionar repositório Kubernetes
+          copy:
+            dest: /etc/apt/sources.list.d/kubernetes.list
+            content: 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.28/deb/ /'
+            mode: '0644'
+
+        - name: Atualizar cache apt
+          apt:
+            update_cache: yes
+
+    - name: Instala Kubernetes
       apt:
-        name: "{{ packages }}"
+        name:
+          - kubelet
+          - kubeadm
+          - kubectl
         state: present
-        update_cache: yes
-      vars:
-        packages:
-        - kubelet
-        - kubeadm
-        - kubectl
 
-    - name: Inicializa o cluster Kubernetes atraves da ferramenta kubeadm
+    - name: Travar versões kubelet/kubeadm/kubectl
+      command: apt-mark hold kubelet kubeadm kubectl
+
+    - name: Inicializa cluster Kubernetes
       shell: kubeadm init --apiserver-advertise-address=172.16.1.100 --pod-network-cidr=192.168.0.0/16 --ignore-preflight-errors=all > /opt/init_cluster
       args:
         creates: /opt/init_cluster
-        
-    - name: Cria o diretório .kube para o usuário vagrant
-      file:
-        path: /home/vagrant/.kube
-        state: directory
-        mode: '0755'
 
-    - name: Configura o kubeconfig para o usuario vagrant
-      copy:
-        src: /etc/kubernetes/admin.conf
-        dest: /home/vagrant/.kube/config
-        remote_src: yes
+    - name: Configura kubeconfig para root, vagrant e suporte
+      block:
+        - name: Cria diretório .kube
+          file:
+            path: "/home/{{ item }}/.kube" 
+            state: directory
+            owner: "{{ item }}"
+            group: "{{ item }}"
+            mode: '0755'
+          loop:
+            - root
+            - vagrant
+            - suporte
 
-    - name: Definir permissao de acesso ao arquivo config
-      file:
-        path: /home/vagrant/.kube/config
-        owner: vagrant
-        group: vagrant
-        mode: '0644'
+        - name: Copia admin.conf para .kube/config
+          copy:
+            src: /etc/kubernetes/admin.conf
+            dest: "/home/{{ item }}/.kube/config"
+            remote_src: yes
+            owner: "{{ item }}"
+            group: "{{ item }}"
+            mode: '0644'
+          loop:
+            - root
+            - vagrant
+            - suporte
 
-    - name: Cria o diretório .kube para o usuário suporte
-      file:
-        path: /home/suporte/.kube
-        state: directory
-        owner: suporte
-        group: suporte
-        mode: '0755'
+    - name: Instala Calico
+      block:
+        - name: Copia arquivos Calico
+          copy:
+            src: files/tigera-operator.yaml
+            dest: /home/vagrant/tigera-operator.yaml
+            owner: vagrant
+            group: vagrant
+            mode: 0644
 
-    - name: Configura o kubeconfig para o usuario suporte
-      copy:
-        src: /etc/kubernetes/admin.conf
-        dest: /home/suporte/.kube/config
-        remote_src: yes
+        - copy:
+            src: files/custom-resources.yaml
+            dest: /home/vagrant/custom-resources.yaml
+            owner: vagrant
+            group: vagrant
+            mode: 0644
 
-    - name: Definir permissao de acesso ao arquivo config
-      file:
-        path: /home/suporte/.kube/config
-        owner: suporte
-        group: suporte
-        mode: '0644'
+        - name: Aplica tigera-operator.yaml
+          become_user: vagrant
+          command: kubectl apply -f /home/vagrant/tigera-operator.yaml
+          environment:
+            KUBECONFIG: /home/vagrant/.kube/config
 
-    - name: Instala a rede calico no cluster
-      become: false
-      command: kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.26.1/manifests/calico.yaml
+        - name: Aguarda tigera-operator Available
+          become_user: vagrant
+          command: kubectl -n tigera-operator wait --for=condition=Available --timeout=180s deployment/tigera-operator
+          register: wait_operator
+          changed_when: false
+          failed_when: wait_operator.rc != 0
+          environment:
+            KUBECONFIG: /home/vagrant/.kube/config
 
-    - name: Permite que o master execute Pods como Worker
-      become: false
+        - name: Aguarda CRDs do Tigera ficarem Established
+          become_user: vagrant
+          loop:
+            - installations.operator.tigera.io
+            - apiservers.operator.tigera.io
+            - goldmanes.operator.tigera.io
+            - whiskers.operator.tigera.io
+          loop_control:
+            loop_var: crd
+            label: "{{ crd }}"
+          command: kubectl wait --for=condition=Established --timeout=180s crd/{{ crd }}
+          register: wait_crds
+          until: wait_crds.rc == 0
+          retries: 10
+          delay: 6
+          changed_when: false
+          environment:
+            KUBECONFIG: /home/vagrant/.kube/config
+
+        - name: Aplica custom-resources.yaml
+          become_user: vagrant
+          command: kubectl apply -f /home/vagrant/custom-resources.yaml
+          environment:
+            KUBECONFIG: /home/vagrant/.kube/config
+
+    - name: Permite que master execute Pods como Worker
+      become_user: vagrant
       command: kubectl taint nodes kube-master node-role.kubernetes.io/control-plane-
+      environment:
+        KUBECONFIG: /home/vagrant/.kube/config
 
-    - name: Gera o comando para o join de novos nodes
+    - name: Gera comando de join para novos nodes
       command: kubeadm token create --print-join-command
       register: join_command
 
-    - name: Copia o comando do join no arquivo local
+    - name: Salva join command localmente
       local_action: copy content="{{ join_command.stdout_lines[0] }}" dest="./join-command"
+
+  handlers:
+    - name: "Reinicia containerd"
+      service:
+        name: containerd
+        state: restarted

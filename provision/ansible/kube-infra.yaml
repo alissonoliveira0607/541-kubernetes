@@ -44,7 +44,7 @@
         
     - name: Clona repositório com os arquivos do curso para a HOME do usuario suporte
       git:
-        repo: 'https://github.com/4linux/541-kubernetes.git'
+        repo: 'https://github.com/alissonoliveira0607/541-kubernetes.git'
         dest: /home/suporte/541
         
     - name: Garantir permissão de superusuário para o usuário analista
@@ -56,7 +56,7 @@
 
     - name: Clona repositório com os arquivos do curso para a HOME do usuario analista
       git:
-        repo: 'https://github.com/4linux/541-kubernetes.git'
+        repo: 'https://github.com/alissonoliveira0607/541-kubernetes.git'
         dest: /home/analista/541
 
     - name: Cria o diretório .ssh
