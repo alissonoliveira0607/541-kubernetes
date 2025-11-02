@@ -46,7 +46,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
         apt-get install -y git ansible
 
         # Clonar o repositório do Git
-        git clone git@github.com:alissonoliveira0607/541-kubernetes.git /home/vagrant/kubernetes
+        git clone https://github.com/alissonoliveira0607/541-kubernetes.git /home/vagrant/kubernetes
 
         cat << EOF | sudo tee -a /etc/ansible/hosts
 [local]
